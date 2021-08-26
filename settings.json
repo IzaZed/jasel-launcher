@@ -1,0 +1,34 @@
+{
+  "Resolution": [
+    "640x480",
+    "1920x1080",
+    [
+      "640x480",
+      "1280x720",
+      "1920x1080",
+      "2048x1080",
+      "2560x1440",
+      "3840x2160"
+    ]
+  ],
+  "Fullscreen": [
+    false,
+    true
+  ],
+  "Borderless": [
+    false,
+    true
+  ],
+  "Quality": [
+    "Very High",
+    "High",
+    [
+      "Very Low",
+      "Low",
+      "Medium",
+      "High",
+      "Very High",
+      "Ultra"
+    ]
+  ]
+}
