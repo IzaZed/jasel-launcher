@@ -1,15 +1,16 @@
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.widget import Widget
 from kivy.uix.relativelayout import RelativeLayout
-from kivy.properties import StringProperty, ObjectProperty, ListProperty
+from kivy.properties import StringProperty, ObjectProperty, ListProperty, NumericProperty
 from kivy.lang.builder import Builder
 from kivy.core.window import Window
 from kivy.clock import Clock
 from subprocess import Popen, PIPE
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.effects.scroll import ScrollEffect
-import os, json, pathlib
+import os, json, pathlib, platform
 
 # USER DATA ####################################################################
 #
@@ -23,7 +24,7 @@ SETTINGS_FILE = 'settings.json'
 BG_IMAGE = 'bg.png'
 #
 # Wether the Buttons are on the left or on the right side
-BUTTON_ORIENTATION = 'left'
+BUTTON_ORIENTATION = 'right'
 #
 # Button Color
 BUTTON_COLOR = [0, 0, 0, .4]
@@ -46,21 +47,34 @@ current_path = pathlib.Path(__file__).parent.resolve()
 
 class LauncherElement():
     roundness = [UI_RADIUS,]
+    font_color = FONT_COLOR
 
 
 Builder.load_string("""
-<SettingsItem>:
+<EmptyButton>:
     background_down: ''
     background_normal: ''
     background_color: 0, 0, 0, 0
 """)
 
-class SettingsItem(Button):
+
+class EmptyButton(Button):
+    pass
+
+
+Builder.load_string("""
+<SettingsItem>:
+""")
+
+class SettingsItem(BoxLayout):
     content = ObjectProperty(False)
     pass
 
 Builder.load_string("""
 <SettingsCheckbox>:
+    background_down: ''
+    background_normal: ''
+    background_color: 0, 0, 0, 0
     canvas.before:
         Color:
             rgba: root.color_active if root.content else root.color_inactive
@@ -71,7 +85,7 @@ Builder.load_string("""
 """)
 
 
-class SettingsCheckbox(SettingsItem, LauncherElement):
+class SettingsCheckbox(SettingsItem, LauncherElement, Button):
     color_active = ListProperty(BUTTON_COLOR_ACTIVE)
     color_inactive = ListProperty(BUTTON_COLOR)
 
@@ -82,6 +96,90 @@ class SettingsCheckbox(SettingsItem, LauncherElement):
 
     def on_press(self, *a):
         self.content = not self.content
+
+
+Builder.load_string("""
+<SelectedItemUI>:
+    canvas.before:
+        Color:
+            rgba: root.color
+        Rectangle:
+            size: self.width - 5, self.height
+            pos: self.x + 2.5, self.y + 2.5
+""")
+
+
+class SelectedItemUI(Widget):
+    color = ListProperty(BUTTON_COLOR)
+    idx = NumericProperty(0)
+
+
+Builder.load_string("""
+<SettingsList>:
+    orientation: 'vertical'
+    BoxLayout:
+        size_hint_x: None
+        width: root.width * .9
+        pos_hint: {'center_x': .5}
+        LauncherButton:
+            text: '<'
+            size_hint: None, None
+            height: root.height * .7
+            width: self.height
+            pos_hint: {'center_y': .5}
+            on_evaluate: root.prev_item()
+        Label:
+            text: root.content
+            font_size: self.height * .5
+            color: root.font_color
+        LauncherButton:
+            text: '>'
+            size_hint: None, None
+            height: root.height * .7
+            width: self.height
+            pos_hint: {'center_y': .5}
+            on_evaluate: root.next_item()
+    BoxLayout:
+        id: selection_ui
+        size_hint_x: None
+        width: root.width * .7
+        pos_hint: {'center_x': .5}
+        size_hint_y: .1 
+""")
+
+
+class SettingsList(SettingsItem, LauncherElement):
+    color_active = ListProperty(BUTTON_COLOR_ACTIVE)
+    color_inactive = ListProperty(BUTTON_COLOR)
+    options = ListProperty([])
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.index = self.options.index(self.content)
+        for i, o in enumerate(self.options):
+            self.ids['selection_ui'].add_widget(SelectedItemUI(idx=i))
+        self.color_active[3] = 1
+        self.color_inactive[3] = 1
+        self.set_selection_ui()
+
+    def next_item(self, *a):
+        self.index += 1
+        if self.index > len(self.options) - 1:
+            self.index = 0
+        self.content = self.options[self.index]
+        self.set_selection_ui()
+
+    def prev_item(self, *a):
+        self.index -= 1
+        if self.index < 0:
+            self.index = len(self.options) - 1
+        self.content = self.options[self.index]
+        self.set_selection_ui()
+    
+    def set_selection_ui(self):
+        for item in self.ids['selection_ui'].children:
+            item.color = BUTTON_COLOR_ACTIVE if item.idx == self.index else BUTTON_COLOR
+
 
 Builder.load_string("""
 <SettingsLabel>:
@@ -123,7 +221,8 @@ class LauncherButton(RelativeLayout, LauncherElement):
     text = StringProperty('')
     font_color = ListProperty(FONT_COLOR)
     background_color = ListProperty(BUTTON_COLOR)
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs):#
+        self.register_event_type('on_evaluate')
         super().__init__(**kwargs)
 
     def on_press(self, *a):
@@ -132,9 +231,9 @@ class LauncherButton(RelativeLayout, LauncherElement):
     
     def reset(self):
         self.background_color = BUTTON_COLOR
-        self.evaluate()
+        self.dispatch('on_evaluate')
 
-    def evaluate(self):
+    def on_evaluate(self, *a):
         pass
 
 Builder.load_string("""
@@ -157,13 +256,12 @@ class LauncherOptionButton(LauncherButton):
 class HomeButton(LauncherButton):
     manager = ObjectProperty(None, allownone=True)
 
-    def evaluate(self):
+    def on_evaluate(self, *a):
         manager = self.manager
         manager.transition.direction = 'right'
         manager.current = 'home'
         with open(f'{os.path.join(current_path, SETTINGS_FILE)}') as f:
             data = json.load(f)
-            print(data)
             for s in reversed(self.parent.parent.parent.ids['settings_area'].children):
                 key, value = s.retrieve_data()
                 data.get(key)[0] = value
@@ -174,14 +272,14 @@ class HomeButton(LauncherButton):
 
 class StartButton(LauncherOptionButton):
 
-    def evaluate(self):
+    def on_evaluate(self, *a):
         os.system(f'{os.path.join(current_path, GAME_PATH)} launched')
         Window.minimize()# App.get_running_app().stop()
 
 
 class SettingsButton(LauncherOptionButton):
 
-    def evaluate(self):
+    def on_evaluate(self, *a):
         manager = self.parent.parent.parent.parent.parent
         manager.transition.direction = 'left'
         manager.current = 'settings'
@@ -189,19 +287,19 @@ class SettingsButton(LauncherOptionButton):
 
 class ModsButton(LauncherOptionButton):
 
-    def evaluate(self):
+    def on_evaluate(self, *a):
         pass
 
 
 class HelpButton(LauncherOptionButton):
 
-    def evaluate(self):
+    def on_evaluate(self, *a):
         pass
 
 
 class QuitButton(LauncherOptionButton):
 
-    def evaluate(self):
+    def on_evaluate(self, *a):  
         App.get_running_app().stop()
 
 
@@ -294,7 +392,7 @@ class SettingsScreen(BaseLayout, LauncherElement):
         with open((f'{os.path.join(current_path, SETTINGS_FILE)}')) as f:
             data = json.load(f)
             for x in data:
-                self.ids['settings_area'].add_widget(SettingsLine(setting=x, content=data[x][0]))
+                self.ids['settings_area'].add_widget(SettingsLine(setting=x, content=data[x]))
             self.ids['settings_area'].height = len(data) * 40
             f.close()
 
@@ -320,6 +418,7 @@ Builder.load_string("""
             size_hint_x: .5
             text_size: self.size[0], self.text_size[1]
             halign: 'right'
+            color: root.font_color
             font_size: root.height * 0.5
 """)
 
@@ -332,10 +431,10 @@ class SettingsLine(BoxLayout, LauncherElement):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         content = self.ids['content']
-        if isinstance(self.content, bool):
-            content.add_widget(SettingsCheckbox(content=self.content))
+        if isinstance(self.content[0], bool):
+            content.add_widget(SettingsCheckbox(content=self.content[0]))
         else:
-            content.add_widget(SettingsLabel(content=self.content))
+            content.add_widget(SettingsList(content=self.content[0], options=self.content[2]))
 
     def retrieve_data(self):
         content = self.ids['content']
@@ -362,15 +461,16 @@ Builder.load_string("""
     Label:
         canvas.before:
             Color:
-                rgba: 0, 0, 0, .5
+                rgba: 0, 0, 0, .2
             RoundedRectangle:
                 radius: root.roundness
                 size:self.size
                 pos: self.pos
         text: f'Version: {root.version}' if root.version else ''
+        font_size: '9pt'
         size_hint: None, None
         size: self.texture_size
-        background_color: 0, 0, 0, .5
+        background_color: 0, 0, 0, .2
 """)
 
 
@@ -400,17 +500,18 @@ class LauncherUI(RelativeLayout, LauncherElement):
             self.setup_event.cancel()
 
     def get_window_size(self):
-        sd = Popen('xrandr | grep "\*" | cut -d" " -f4',
-                   shell=True,
-                   stdout=PIPE).communicate()[0]
-        splits = sd.decode("utf-8").split('x')
+        if platform.system() == 'Linux':
+            sd = Popen('xrandr | grep "\*" | cut -d" " -f4',
+                    shell=True,
+                    stdout=PIPE).communicate()[0]
+            splits = sd.decode("utf-8").split('x')
 
-        try:
-            a = splits[0]
-            b = splits[1].split('\n')[0]
-        except:
-            a, b = (0, 0)
-        return (int(a), int(b))
+            try:
+                a = splits[0]
+                b = splits[1].split('\n')[0]
+            except:
+                a, b = (0, 0)
+            return (int(a), int(b))
 
     def fetch_data(self, *a):
         try:
