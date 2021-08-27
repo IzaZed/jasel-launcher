@@ -1,6 +1,6 @@
 {
   "Fullscreen": [
-    true,
+    false,
     true
   ],
   "Borderless": [
@@ -8,7 +8,7 @@
     true
   ],
   "Resolution": [
-    "3840x2160",
+    "640x480",
     "1920x1080",
     [
       "640x480",
@@ -20,7 +20,7 @@
     ]
   ],
   "Quality": [
-    "Medium",
+    "Very Low",
     "High",
     [
       "Very Low",
@@ -41,7 +41,7 @@
     ]
   ],
   "Volume": [
-    0.9510112359550561,
+    0.9815217391304347,
     1.0,
     [
       0.0,

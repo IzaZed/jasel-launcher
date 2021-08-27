@@ -1,8 +1,10 @@
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.widget import Widget
 from kivy.uix.slider import Slider
 from kivy.uix.relativelayout import RelativeLayout
+from kivy.uix.effectwidget import HorizontalBlurEffect, VerticalBlurEffect
 from kivy.properties import StringProperty, ObjectProperty, ListProperty, NumericProperty
 from kivy.lang.builder import Builder
 from kivy.core.window import Window
@@ -47,7 +49,11 @@ UI_RADIUS = 3
 current_path = pathlib.Path(__file__).parent.resolve()
 
 
-class LauncherElement():
+class BasicLauncherItem(Widget):
+    master = ObjectProperty(None)
+
+
+class LauncherElement(BasicLauncherItem):
     roundness = [UI_RADIUS,]
     font_color = FONT_COLOR
     background_color = BUTTON_COLOR
@@ -76,8 +82,6 @@ class SettingsItem(BoxLayout):
 
 Builder.load_string("""
 <SettingsCheckbox>:
-    background_down: ''
-    background_normal: ''
     canvas.before:
         Color:
             rgba: root.color_active if root.content else root.color_inactive
@@ -88,7 +92,7 @@ Builder.load_string("""
 """)
 
 
-class SettingsCheckbox(SettingsItem, LauncherElement, Button):
+class SettingsCheckbox(SettingsItem, LauncherElement, EmptyButton):
     color_active = ListProperty(BUTTON_COLOR_ACTIVE)
     color_inactive = ListProperty(BUTTON_COLOR)
     background_color = ListProperty([0, 0, 0, 0])
@@ -108,16 +112,13 @@ Builder.load_string("""
         Rectangle:
             size: self.width - 5, self.height
             pos: self.x, self.y
-    background_down: ''
-    background_normal: ''
-    background_color: 0, 0, 0, 0
 """)
 
 
-class SelectedItemUI(Button):
+class SelectedItemUI(EmptyButton):
     setting = ObjectProperty(None)
     color = ListProperty(BUTTON_COLOR)
-    idx = NumericProperty(0)
+    idx = NumericProperty(-1)
 
     def on_press(self, *a):
         self.setting.index = self.idx
@@ -137,10 +138,20 @@ Builder.load_string("""
             width: self.height
             pos_hint: {'center_y': .5}
             on_evaluate: root.prev_item()
-        Label:
-            text: root.content
-            font_size: self.height * .5
-            color: root.font_color
+        BoxLayout:
+            orientation: 'vertical'
+            Label:
+                text: root.content
+                font_size: self.height * .5
+                color: root.font_color
+            BoxLayout:
+                id: selection_ui
+                size_hint_x: None
+                width: root.width * .7
+                pos_hint: {'center_x': .5}
+                size_hint_y: .1
+            BoxLayout:
+                size_hint_y: .1
         LauncherButton:
             text: '>'
             size_hint: None, None
@@ -148,14 +159,6 @@ Builder.load_string("""
             width: self.height
             pos_hint: {'center_y': .5}
             on_evaluate: root.next_item()
-    BoxLayout:
-        id: selection_ui
-        size_hint_x: None
-        width: root.width * .7
-        pos_hint: {'center_x': .5}
-        size_hint_y: .1
-    BoxLayout:
-        size_hint_y: .1
 """)
 
 
@@ -163,7 +166,7 @@ class SettingsList(SettingsItem, LauncherElement):
     color_active = ListProperty(BUTTON_COLOR_ACTIVE)
     color_inactive = ListProperty(BUTTON_COLOR)
     options = ListProperty([])
-    index = NumericProperty(0)
+    index = NumericProperty(-1)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -294,6 +297,7 @@ class LauncherButton(RelativeLayout, LauncherElement):
     text = StringProperty('')
     font_color = ListProperty(FONT_COLOR)
     background_color = ListProperty(BUTTON_COLOR)
+
     def __init__(self, **kwargs):#
         self.register_event_type('on_evaluate')
         super().__init__(**kwargs)
@@ -322,7 +326,7 @@ Builder.load_string("""
 """)
 
 
-class LauncherOptionButton(LauncherButton):
+class LauncherOptionButton(LauncherButton, BasicLauncherItem):
     pass
 
 
@@ -333,6 +337,7 @@ class HomeButton(LauncherButton):
         manager = self.manager
         manager.transition.direction = 'right'
         manager.current = 'home'
+        self.manager.parent.set_blur(0)
         with open(f'{os.path.join(current_path, SETTINGS_FILE)}') as f:
             data = json.load(f)
             for s in reversed(self.parent.parent.parent.ids['settings_area'].children):
@@ -353,9 +358,11 @@ class StartButton(LauncherOptionButton):
 class SettingsButton(LauncherOptionButton):
 
     def on_evaluate(self, *a):
-        manager = self.parent.parent.parent.parent.parent
-        manager.transition.direction = 'left'
-        manager.current = 'settings'
+        master = self.master
+        master.transition.direction = 'left'
+        master.current = 'settings'
+        
+        master.parent.set_blur(15)
 
 
 class ModsButton(LauncherOptionButton):
@@ -382,7 +389,7 @@ class QuitButton(LauncherOptionButton):
         App.get_running_app().stop()
 
 
-class BaseLayout(Screen):
+class BaseLayout(Screen, BasicLauncherItem):
     pass
 
 
@@ -422,7 +429,7 @@ class HomeScreen(BaseLayout):
         buttons.add_widget(StartButton(text='Start'))
         for o in OPTIONS:
             try:
-                buttons.add_widget(self.options.get(o)(text=o))
+                buttons.add_widget(self.options.get(o)(text=o, master=self.master))
             except:
                 pass
         buttons.add_widget(QuitButton(text='Quit'))
@@ -524,22 +531,24 @@ class SettingsLine(BoxLayout, LauncherElement):
         return data
 
 
-class LauncherScreenManager(ScreenManager):
+class LauncherScreenManager(ScreenManager, BasicLauncherItem):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.add_widget(HomeScreen(name='home'))
-        self.add_widget(SettingsScreen(name='settings'))
-        self.add_widget(Screen(name='help'))
+        self.add_widget(HomeScreen(name='home', master=self))
+        self.add_widget(SettingsScreen(name='settings', master=self))
 
 
 Builder.load_string("""
 <LauncherUI>:
-    AsyncImage:
-        id: bg_image
-        source: root.bg
+    EffectWidget:
+        id: effects
+        AsyncImage:
+            id: bg_image
+            source: root.bg
     LauncherScreenManager:
         id: screen_manager
+        master: root
     Label:
         canvas.before:
             Color:
@@ -562,13 +571,17 @@ class LauncherUI(RelativeLayout, LauncherElement):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.hblur = HorizontalBlurEffect(size=0)
+        self.vblur = VerticalBlurEffect(size=0)
+        self.ids['effects'].effects = [self.hblur, self.vblur]
         width = 1
-        height=1
+        height = 1
         Window.borderless = True
         Window.fullscreen = False
         Window.size = (width, height)
         Clock.schedule_interval(self.fetch_data, 5)
         self.setup_event = Clock.schedule_interval(self.setup_launcher, 0)
+        self.blur_event = None
     
     def setup_launcher(self, *a):
         width = self.ids['bg_image'].texture.size[0]
@@ -580,6 +593,14 @@ class LauncherUI(RelativeLayout, LauncherElement):
             Window.left = screen_width/2 - width/2
             print(width, height)
             self.setup_event.cancel()
+
+    def set_blur(self, target):
+        factor = .2
+        self.hblur.size = self.vblur.size = (factor * target) + ((1-factor) * self.hblur.size)
+        if not (target - .1 < self.hblur.size < target + .1):
+            if self.blur_event:
+                self.blur_event.cancel()
+            self.blur_event = Clock.schedule_once(lambda dt: self.set_blur(target))
 
     def get_window_size(self):
         if platform.system() == 'Linux':
