@@ -42,6 +42,9 @@ FONT_COLOR = [1, 1, .8]
 # [Settings, Help, Mods, 'DLCs']
 OPTIONS = ['Settings', 'Help', 'DLCs']
 #
+# Whether to use blur on screens other than the main screen
+USE_BLUR = True
+#
 # Roundness of the Buttons and fields
 UI_RADIUS = 3
 ################################################################################
@@ -110,8 +113,8 @@ Builder.load_string("""
         Color:
             rgba: root.color
         Rectangle:
-            size: self.width - 5, self.height
-            pos: self.x, self.y
+            size: self.width - 5, self.height / 3
+            pos: self.x, self.y + self.height / 3
 """)
 
 
@@ -149,7 +152,7 @@ Builder.load_string("""
                 size_hint_x: None
                 width: root.width * .7
                 pos_hint: {'center_x': .5}
-                size_hint_y: .1
+                size_hint_y: .3
             BoxLayout:
                 size_hint_y: .1
         LauncherButton:
@@ -337,7 +340,8 @@ class HomeButton(LauncherButton):
         manager = self.manager
         manager.transition.direction = 'right'
         manager.current = 'home'
-        self.manager.parent.set_blur(0)
+        if USE_BLUR:
+            self.manager.parent.set_blur(0)
         with open(f'{os.path.join(current_path, SETTINGS_FILE)}') as f:
             data = json.load(f)
             for s in reversed(self.parent.parent.parent.ids['settings_area'].children):
@@ -362,7 +366,8 @@ class SettingsButton(LauncherOptionButton):
         master.transition.direction = 'left'
         master.current = 'settings'
         
-        master.parent.set_blur(15)
+        if USE_BLUR:
+            master.parent.set_blur(15)
 
 
 class ModsButton(LauncherOptionButton):
