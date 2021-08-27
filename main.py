@@ -1,7 +1,7 @@
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
-from kivy.uix.widget import Widget
+from kivy.uix.slider import Slider
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.properties import StringProperty, ObjectProperty, ListProperty, NumericProperty
 from kivy.lang.builder import Builder
@@ -11,6 +11,7 @@ from subprocess import Popen, PIPE
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.effects.scroll import ScrollEffect
 import os, json, pathlib, platform
+from win32api import GetSystemMetrics
 
 # USER DATA ####################################################################
 #
@@ -35,8 +36,9 @@ BUTTON_COLOR_ACTIVE = [1, 1, .4, .8]
 # Font Color
 FONT_COLOR = [1, 1, .8]
 #
-# Options to be shown in the main menu; Available are Settings, Help, Mods
-OPTIONS = ['Settings', 'Help', 'Mods']
+# Options to be shown in the main menu; Available are:
+# [Settings, Help, Mods, 'DLCs']
+OPTIONS = ['Settings', 'Help', 'DLCs']
 #
 # Roundness of the Buttons and fields
 UI_RADIUS = 3
@@ -48,6 +50,8 @@ current_path = pathlib.Path(__file__).parent.resolve()
 class LauncherElement():
     roundness = [UI_RADIUS,]
     font_color = FONT_COLOR
+    background_color = BUTTON_COLOR
+    active_color = BUTTON_COLOR_ACTIVE
 
 
 Builder.load_string("""
@@ -74,7 +78,6 @@ Builder.load_string("""
 <SettingsCheckbox>:
     background_down: ''
     background_normal: ''
-    background_color: 0, 0, 0, 0
     canvas.before:
         Color:
             rgba: root.color_active if root.content else root.color_inactive
@@ -88,11 +91,10 @@ Builder.load_string("""
 class SettingsCheckbox(SettingsItem, LauncherElement, Button):
     color_active = ListProperty(BUTTON_COLOR_ACTIVE)
     color_inactive = ListProperty(BUTTON_COLOR)
+    background_color = ListProperty([0, 0, 0, 0])
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.color_active[3] = 1
-        self.color_inactive[3] = 1
 
     def on_press(self, *a):
         self.content = not self.content
@@ -105,13 +107,20 @@ Builder.load_string("""
             rgba: root.color
         Rectangle:
             size: self.width - 5, self.height
-            pos: self.x + 2.5, self.y + 2.5
+            pos: self.x, self.y
+    background_down: ''
+    background_normal: ''
+    background_color: 0, 0, 0, 0
 """)
 
 
-class SelectedItemUI(Widget):
+class SelectedItemUI(Button):
+    setting = ObjectProperty(None)
     color = ListProperty(BUTTON_COLOR)
     idx = NumericProperty(0)
+
+    def on_press(self, *a):
+        self.setting.index = self.idx
 
 
 Builder.load_string("""
@@ -144,7 +153,9 @@ Builder.load_string("""
         size_hint_x: None
         width: root.width * .7
         pos_hint: {'center_x': .5}
-        size_hint_y: .1 
+        size_hint_y: .1
+    BoxLayout:
+        size_hint_y: .1
 """)
 
 
@@ -152,33 +163,95 @@ class SettingsList(SettingsItem, LauncherElement):
     color_active = ListProperty(BUTTON_COLOR_ACTIVE)
     color_inactive = ListProperty(BUTTON_COLOR)
     options = ListProperty([])
+    index = NumericProperty(0)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.index = self.options.index(self.content)
         for i, o in enumerate(self.options):
-            self.ids['selection_ui'].add_widget(SelectedItemUI(idx=i))
+            self.ids['selection_ui'].add_widget(SelectedItemUI(idx=i, setting=self))
         self.color_active[3] = 1
         self.color_inactive[3] = 1
+        self.index = self.options.index(self.content) if self.content in self.options else -1
+    
+    def on_index(self, *a):
+        self.content = self.options[self.index]
         self.set_selection_ui()
 
     def next_item(self, *a):
-        self.index += 1
-        if self.index > len(self.options) - 1:
-            self.index = 0
-        self.content = self.options[self.index]
-        self.set_selection_ui()
+        idx = self.index
+        idx += 1
+        if idx > len(self.options) - 1:
+            idx = 0
+        self.index = idx
 
     def prev_item(self, *a):
-        self.index -= 1
-        if self.index < 0:
-            self.index = len(self.options) - 1
-        self.content = self.options[self.index]
-        self.set_selection_ui()
+        idx = self.index
+        idx -= 1
+        if idx < 0:
+            idx = len(self.options) - 1
+        self.index = idx
     
     def set_selection_ui(self):
         for item in self.ids['selection_ui'].children:
             item.color = BUTTON_COLOR_ACTIVE if item.idx == self.index else BUTTON_COLOR
+
+
+Builder.load_string("""
+<LauncherSlider>:
+    canvas.before:
+        Color:
+            rgba: root.background_color
+        Rectangle:
+            size: self.width * .95, self.height
+            pos: self.x + root.width * .05 / 2, self.y
+        Color:
+            rgba: root.active_color
+        Rectangle:
+            size: self.size[0] * root.value / root.max * .95, self.size[1]
+            pos: self.x + root.width * .05 / 2, self.y
+    cursor_size: 0, 0
+    background_width: 0
+""")
+
+
+class LauncherSlider(Slider, LauncherElement):
+    master = ObjectProperty(None)
+
+    def on_value(self, *a):
+        self.master.content = self.value
+    pass
+
+
+Builder.load_string("""
+<SettingsSlider>:
+    orientation: 'vertical'
+    Widget:
+    BoxLayout:
+        size_hint: .9, None
+        height: 5
+        pos_hint: {'center_x': .5}
+        LauncherSlider:
+            id: slider
+            master: root
+            min: root.range[0]
+            max: root.range[1]
+        Label:
+            text: "{:.2f}".format(root.content)
+            size_hint_x: .2
+            color: root.font_color
+            font_size: root.height * .5
+    Widget:
+""")
+
+
+class SettingsSlider(SettingsItem, LauncherElement):
+    color_active = ListProperty(BUTTON_COLOR_ACTIVE)
+    color_inactive = ListProperty(BUTTON_COLOR)
+    range = ListProperty([])
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.ids['slider'].value = self.content
 
 
 Builder.load_string("""
@@ -291,6 +364,12 @@ class ModsButton(LauncherOptionButton):
         pass
 
 
+class DLCButton(LauncherOptionButton):
+
+    def on_evaluate(self, *a):
+        pass
+
+
 class HelpButton(LauncherOptionButton):
 
     def on_evaluate(self, *a):
@@ -333,7 +412,8 @@ class HomeScreen(BaseLayout):
     options = {
         'Settings': SettingsButton,
         'Help': HelpButton,
-        'Mods': ModsButton
+        'Mods': ModsButton,
+        'DLCs': DLCButton
     }
 
     def __init__(self, **kwargs):
@@ -433,6 +513,8 @@ class SettingsLine(BoxLayout, LauncherElement):
         content = self.ids['content']
         if isinstance(self.content[0], bool):
             content.add_widget(SettingsCheckbox(content=self.content[0]))
+        elif isinstance(self.content[0], float):
+            content.add_widget(SettingsSlider(content=self.content[0], range=self.content[2]))
         else:
             content.add_widget(SettingsList(content=self.content[0], options=self.content[2]))
 
@@ -512,6 +594,14 @@ class LauncherUI(RelativeLayout, LauncherElement):
             except:
                 a, b = (0, 0)
             return (int(a), int(b))
+        if platform.system() == 'Windows':
+            try:
+                return(int(GetSystemMetrics(0)), int(GetSystemMetrics(1)))
+            except:
+                a, b = (0, 0)
+            return (int(a), int(b))
+        else:
+            return (11, 1080)
 
     def fetch_data(self, *a):
         try:

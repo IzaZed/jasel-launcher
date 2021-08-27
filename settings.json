@@ -1,6 +1,14 @@
 {
+  "Fullscreen": [
+    true,
+    true
+  ],
+  "Borderless": [
+    true,
+    true
+  ],
   "Resolution": [
-    "640x480",
+    "3840x2160",
     "1920x1080",
     [
       "640x480",
@@ -11,16 +19,8 @@
       "3840x2160"
     ]
   ],
-  "Fullscreen": [
-    false,
-    true
-  ],
-  "Borderless": [
-    false,
-    true
-  ],
   "Quality": [
-    "Very High",
+    "Medium",
     "High",
     [
       "Very Low",
@@ -29,6 +29,23 @@
       "High",
       "Very High",
       "Ultra"
+    ]
+  ],
+  "Anti-Aliasing": [
+    "Off",
+    "SMAA",
+    [
+      "Off",
+      "FXAA",
+      "SMAA"
+    ]
+  ],
+  "Volume": [
+    0.9510112359550561,
+    1.0,
+    [
+      0.0,
+      1.0
     ]
   ]
 }
