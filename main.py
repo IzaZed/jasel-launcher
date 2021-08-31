@@ -12,10 +12,14 @@ from kivy.clock import Clock
 from subprocess import Popen, PIPE
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.effects.scroll import ScrollEffect
-import os, json, pathlib, platform
+import os, json, pathlib, platform, webbrowser
 from win32api import GetSystemMetrics
 
 # USER DATA ####################################################################
+#
+# Options to be shown in the main menu; Available are:
+# [Settings, Help]
+OPTIONS = ['Settings', 'Help']
 #
 # Path to the executable, must be relative to the launcher
 GAME_PATH = 'game.exe'
@@ -25,6 +29,9 @@ SETTINGS_FILE = 'settings.json'
 #
 # Path to the background image, must be relative to the launcher
 BG_IMAGE = 'bg.png'
+#
+# This is the website that will be opened by the Help button
+HELP_LINK = 'https://en.wikipedia.org/wiki/Help!'
 #
 # Wether the Buttons are on the left or on the right side
 BUTTON_ORIENTATION = 'right'
@@ -37,10 +44,6 @@ BUTTON_COLOR_ACTIVE = [1, 1, .4, .8]
 #
 # Font Color
 FONT_COLOR = [1, 1, .8]
-#
-# Options to be shown in the main menu; Available are:
-# [Settings, Help, Mods, 'DLCs']
-OPTIONS = ['Settings', 'Help', 'DLCs']
 #
 # Whether to use blur on screens other than the main screen
 USE_BLUR = True
@@ -270,7 +273,7 @@ class SettingsLabel(SettingsItem):
 
 Builder.load_string("""
 <LauncherButton>:
-    Button:
+    EmptyButton:
         canvas.before:
             Color:
                 rgba: root.background_color
@@ -281,9 +284,6 @@ Builder.load_string("""
         id: button
         size_hint: None, None
         size: root.width - 5, root.height - 5
-        background_down: ''
-        background_normal: ''
-        background_color: [0, 0, 0, 0]
         on_press: root.on_press()
         pos_hint: {'center_y' : .5, 'center_x': .5}
     Label:
@@ -304,6 +304,7 @@ class LauncherButton(RelativeLayout, LauncherElement):
     def __init__(self, **kwargs):#
         self.register_event_type('on_evaluate')
         super().__init__(**kwargs)
+        Window.bind(mouse_pos=self.on_mouse_pos)
 
     def on_press(self, *a):
         self.background_color = BUTTON_COLOR_ACTIVE
@@ -315,6 +316,24 @@ class LauncherButton(RelativeLayout, LauncherElement):
 
     def on_evaluate(self, *a):
         pass
+
+
+    def on_mouse_pos(self, *args):
+        if not self.get_root_window():
+            return
+        pos = args[1]
+        if self.collide_point(*pos):
+            Clock.schedule_once(self.mouse_enter_css, 0)
+        else:
+            Clock.schedule_once(self.mouse_leave_css, 0)
+
+    def mouse_leave_css(self, *args):
+        self.background_color = BUTTON_COLOR
+        self.font_color = FONT_COLOR
+
+    def mouse_enter_css(self, *args):
+        self.font_color = BUTTON_COLOR
+        self.background_color = BUTTON_COLOR_ACTIVE
 
 Builder.load_string("""
 <LauncherOptionButton>:
@@ -385,6 +404,7 @@ class DLCButton(LauncherOptionButton):
 class HelpButton(LauncherOptionButton):
 
     def on_evaluate(self, *a):
+        webbrowser.open(HELP_LINK)
         pass
 
 
@@ -431,7 +451,7 @@ class HomeScreen(BaseLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         buttons = self.ids[BUTTON_ORIENTATION]
-        buttons.add_widget(StartButton(text='Start'))
+        buttons.add_widget(StartButton(text='Play'))
         for o in OPTIONS:
             try:
                 buttons.add_widget(self.options.get(o)(text=o, master=self.master))
@@ -600,7 +620,7 @@ class LauncherUI(RelativeLayout, LauncherElement):
             self.setup_event.cancel()
 
     def set_blur(self, target):
-        factor = .2
+        factor = .14
         self.hblur.size = self.vblur.size = (factor * target) + ((1-factor) * self.hblur.size)
         if not (target - .1 < self.hblur.size < target + .1):
             if self.blur_event:
