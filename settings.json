@@ -1,10 +1,10 @@
 {
   "Fullscreen": [
-    true,
+    false,
     true
   ],
   "Borderless": [
-    true,
+    false,
     true
   ],
   "Resolution": [
@@ -41,11 +41,23 @@
     ]
   ],
   "Volume": [
-    0.3128089887640449,
+    0.40943820224719096,
     1.0,
     [
       0.0,
       1.0
+    ]
+  ],
+  "Shadows": [
+    0.40943820224719096,
+    "High",
+    [
+      "Very Low",
+      "Low",
+      "Medium",
+      "High",
+      "Very High",
+      "Ultra"
     ]
   ]
 }

@@ -13,7 +13,6 @@ from subprocess import Popen, PIPE
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.effects.scroll import ScrollEffect
 import os, json, pathlib, platform, webbrowser
-from win32api import GetSystemMetrics
 
 # USER DATA ####################################################################
 #
@@ -93,7 +92,8 @@ Builder.load_string("""
             rgba: root.color_active if root.content else root.color_inactive
         RoundedRectangle:
             radius: root.roundness
-            pos: self.pos[0] + self.width/2 - self.size[1]*.6 / 2, self.pos[1] + (self.size[1]*.4/2)
+            #pos: self.pos[0] + self.width/2 - self.size[1]*.6 / 2, self.pos[1] + (self.size[1]*.4/2)
+            pos: self.pos[0] + (self.size[0] * 0.1) / 2, self.pos[1] + (self.size[1]*.4/2)
             size: self.size[1]*.6, self.size[1]*.6
 """)
 
@@ -211,13 +211,13 @@ Builder.load_string("""
         Color:
             rgba: root.background_color
         Rectangle:
-            size: self.width * .95, self.height
-            pos: self.x + root.width * .05 / 2, self.y
+            size: self.width * .95, self.height * 0.25
+            pos: self.x + root.width * .05 / 2, self.y + self.height * 0.5 - root.height / 8
         Color:
             rgba: root.active_color
         Rectangle:
-            size: self.size[0] * root.value / root.max * .95, self.size[1]
-            pos: self.x + root.width * .05 / 2, self.y
+            size: self.size[0] * root.value / root.max * .95, self.size[1] * .25
+            pos: self.x + root.width * .05 / 2, self.y + self.height * .5 - root.height / 8
     cursor_size: 0, 0
     background_width: 0
 """)
@@ -237,7 +237,7 @@ Builder.load_string("""
     Widget:
     BoxLayout:
         size_hint: .9, None
-        height: 5
+        height: 20
         pos_hint: {'center_x': .5}
         LauncherSlider:
             id: slider
@@ -361,12 +361,12 @@ class HomeButton(LauncherButton):
         manager.current = 'home'
         if USE_BLUR:
             self.manager.parent.set_blur(0)
-        with open(f'{os.path.join(current_path, SETTINGS_FILE)}') as f:
+        with open(os.path.join(current_path, SETTINGS_FILE)) as f:
             data = json.load(f)
             for s in reversed(self.parent.parent.parent.ids['settings_area'].children):
                 key, value = s.retrieve_data()
                 data.get(key)[0] = value
-        with open((f'{os.path.join(current_path, SETTINGS_FILE)}'), 'w') as f:
+        with open((os.path.join(current_path, SETTINGS_FILE)), 'w') as f:
             json.dump(data, f, indent=2)
             f.close()
 
@@ -374,7 +374,7 @@ class HomeButton(LauncherButton):
 class StartButton(LauncherOptionButton):
 
     def on_evaluate(self, *a):
-        os.system(f'{os.path.join(current_path, GAME_PATH)} launched')
+        os.system(os.path.join(current_path, GAME_PATH) + 'launched')
         Window.minimize()# App.get_running_app().stop()
 
 
@@ -501,7 +501,7 @@ class SettingsScreen(BaseLayout, LauncherElement):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.ids['scroll'].effect_cls = ScrollEffect
-        with open((f'{os.path.join(current_path, SETTINGS_FILE)}')) as f:
+        with open((os.path.join(current_path, SETTINGS_FILE))) as f:
             data = json.load(f)
             for x in data:
                 self.ids['settings_area'].add_widget(SettingsLine(setting=x, content=data[x]))
@@ -641,6 +641,7 @@ class LauncherUI(RelativeLayout, LauncherElement):
                 a, b = (0, 0)
             return (int(a), int(b))
         if platform.system() == 'Windows':
+            from win32api import GetSystemMetrics
             try:
                 return(int(GetSystemMetrics(0)), int(GetSystemMetrics(1)))
             except:
